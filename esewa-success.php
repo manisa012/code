@@ -2,38 +2,47 @@
 session_start();
 include('includes/config.php');
 
-// eSewa sends oid, amt, and refId in the URL parameters upon success
-$oid = $_GET['oid'] ?? '';
-$amt = $_GET['amt'] ?? '';
-$refId = $_GET['refId'] ?? '';
+// In eSewa V2, success redirect includes a base64 encoded 'data' parameter
+$data = $_GET['data'] ?? '';
 
-if (empty($oid) || empty($amt) || empty($refId)) {
-    die("Invalid request from eSewa.");
+if (empty($data)) {
+    die("Invalid request from eSewa. No data received.");
 }
 
-// Verification URL (Sandbox/UAT)
-$url = "https://uat.esewa.com.np/epay/transrec";
-$data = [
-    'amt' => $amt,
-    'rid' => $refId,
-    'pid' => $oid,
-    'scd' => 'EPAYTEST' // Same merchant code used in payment request
-];
+// Decode the data
+$decoded_data = base64_decode($data);
+$result = json_decode($decoded_data, true);
 
-$curl = curl_init($url);
-curl_setopt($curl, CURLOPT_POST, true);
-curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
-curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-$response = curl_exec($curl);
-curl_close($curl);
+if (!$result) {
+    die("Failed to decode eSewa response.");
+}
 
-// eSewa response is XML. If successful, it contains <response_code>Success</response_code>
-if (strpos($response, "Success") !== false) {
-    // Payment Verified Successfully
+/*
+Example decoded result:
+{
+  "status": "COMPLETE",
+  "signature": "...",
+  "transaction_code": "...",
+  "total_amount": "...",
+  "transaction_uuid": "...",
+  "product_code": "...",
+  "success_url": "...",
+  "signed_field_names": "..."
+}
+*/
+
+$transaction_uuid = $result['transaction_uuid'] ?? '';
+$status = $result['status'] ?? '';
+$total_amount = $result['total_amount'] ?? '';
+$transaction_code = $result['transaction_code'] ?? '';
+
+if ($status === "COMPLETE") {
+    // Payment Verified Successfully (You can also verify the signature here for extra security)
+    
     // Update the orders table
-    $updateQuery = "UPDATE orders SET paymentStatus = 'Completed', referenceCode = '$refId' WHERE transactionId = '$oid'";
+    $updateQuery = "UPDATE orders SET paymentStatus = 'Completed', referenceCode = '$transaction_code' WHERE transactionId = '$transaction_uuid'";
+    
     if (mysqli_query($con, $updateQuery)) {
-        // Clear cart if not already cleared (depends on project flow, usually cart is cleared at order creation)
         unset($_SESSION['cart']);
         
         echo "<!DOCTYPE html>
@@ -50,9 +59,9 @@ if (strpos($response, "Success") !== false) {
         <body>
             <div class='card'>
                 <h1>✔ Payment Successful!</h1>
-                <p>Thank you for your purchase. Your payment of Rs. $amt has been verified.</p>
-                <p>Transaction ID: $oid</p>
-                <p>eSewa Reference: $refId</p>
+                <p>Thank you for your purchase. Your payment of Rs. $total_amount has been completed.</p>
+                <p>Order ID: $transaction_uuid</p>
+                <p>eSewa Transaction Code: $transaction_code</p>
                 <a href='order-history.php' class='btn'>View Order History</a>
             </div>
         </body>
@@ -61,9 +70,9 @@ if (strpos($response, "Success") !== false) {
         echo "Error updating order: " . mysqli_error($con);
     }
 } else {
-    // Verification failed
+    // Status is not COMPLETE
     echo "<h1>Payment Verification Failed</h1>";
-    echo "<p>The payment could not be verified by eSewa. Please contact support.</p>";
+    echo "<p>Status: " . htmlentities($status) . "</p>";
     echo "<a href='index.php'>Back to Home</a>";
 }
 ?>

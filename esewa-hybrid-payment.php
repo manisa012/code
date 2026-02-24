@@ -30,9 +30,11 @@ $transactionId = "EPAY-" . time() . "-" . $userId;
 // Update orders with this transaction ID
 mysqli_query($con, "UPDATE orders SET transactionId = '$transactionId' WHERE userId = '$userId' AND paymentMethod = 'eSewa' AND (paymentStatus IS NULL OR paymentStatus = 'Pending')");
 
-// eSewa Configuration (Using Sandbox/Test credentials)
-$epay_url = "https://uat.esewa.com.np/epay/main";
-$merchant_code = "EPAYTEST"; // Default TEST merchant code
+// eSewa Configuration (EPAY V2 Sandbox)
+$epay_url = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
+$product_code = "EPAYTEST"; 
+$secret_key = "8g8MpS2P8C6q4u8S"; // Standard sandbox secret key
+
 // Dynamically determine the base URL
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
 $host = $_SERVER['HTTP_HOST'];
@@ -40,6 +42,11 @@ $base_url = $protocol . "://" . $host . rtrim(dirname($_SERVER['PHP_SELF']), '/\
 
 $success_url = $base_url . "/esewa-success.php";
 $failure_url = $base_url . "/esewa-failure.php";
+
+// Generate Signature for V2
+$signed_field_names = "total_amount,transaction_uuid,product_code";
+$data_to_sign = "total_amount=$totalAmount,transaction_uuid=$transactionId,product_code=$product_code";
+$signature = base64_encode(hash_hmac('sha256', $data_to_sign, $secret_key, true));
 
 ?>
 <!DOCTYPE html>
@@ -62,15 +69,17 @@ $failure_url = $base_url . "/esewa-failure.php";
         <p>Please wait while we redirect you to eSewa Digital Wallet...</p>
         
         <form id="esewaForm" action="<?php echo $epay_url; ?>" method="POST">
-            <input value="<?php echo $totalAmount; ?>" name="tAmt" type="hidden">
-            <input value="<?php echo $totalAmount; ?>" name="amt" type="hidden">
-            <input value="0" name="txAmt" type="hidden">
-            <input value="0" name="psc" type="hidden">
-            <input value="0" name="pdc" type="hidden">
-            <input value="<?php echo $merchant_code; ?>" name="scd" type="hidden">
-            <input value="<?php echo $transactionId; ?>" name="pid" type="hidden">
-            <input value="<?php echo $success_url; ?>" name="su" type="hidden">
-            <input value="<?php echo $failure_url; ?>" name="fu" type="hidden">
+            <input type="hidden" id="amount" name="amount" value="<?php echo $totalAmount; ?>" required>
+            <input type="hidden" id="tax_amount" name="tax_amount" value="0" required>
+            <input type="hidden" id="total_amount" name="total_amount" value="<?php echo $totalAmount; ?>" required>
+            <input type="hidden" id="transaction_uuid" name="transaction_uuid" value="<?php echo $transactionId; ?>" required>
+            <input type="hidden" id="product_code" name="product_code" value="<?php echo $product_code; ?>" required>
+            <input type="hidden" id="product_service_charge" name="product_service_charge" value="0" required>
+            <input type="hidden" id="product_delivery_charge" name="product_delivery_charge" value="0" required>
+            <input type="hidden" id="success_url" name="success_url" value="<?php echo $success_url; ?>" required>
+            <input type="hidden" id="failure_url" name="failure_url" value="<?php echo $failure_url; ?>" required>
+            <input type="hidden" id="signed_field_names" name="signed_field_names" value="<?php echo $signed_field_names; ?>" required>
+            <input type="hidden" id="signature" name="signature" value="<?php echo $signature; ?>" required>
         </form>
     </div>
 
