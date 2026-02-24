@@ -17,15 +17,16 @@ $query = mysqli_query($con, "SELECT SUM(products.productPrice * orders.quantity 
                              WHERE orders.userId = '$userId' AND orders.paymentMethod = 'eSewa' AND (orders.paymentStatus IS NULL OR orders.paymentStatus = 'Pending')");
 
 $row = mysqli_fetch_array($query);
-$totalAmount = $row['total'];
+// Ensure total amount is a clean string with no extra decimals
+$totalAmount = (string)$row['total'];
 
 if(!$totalAmount || $totalAmount <= 0) {
     echo "<script>alert('No pending orders found for eSewa payment.'); window.location.href='index.php';</script>";
     exit();
 }
 
-// Generate a unique Transaction/Invoice ID
-$transactionId = "EPAY-" . time() . "-" . $userId;
+// Generate a unique Transaction/Invoice ID (only alphanumeric and hyphen allowed)
+$transactionId = "ORDER-" . $userId . "-" . time();
 
 // Update orders with this transaction ID
 mysqli_query($con, "UPDATE orders SET transactionId = '$transactionId' WHERE userId = '$userId' AND paymentMethod = 'eSewa' AND (paymentStatus IS NULL OR paymentStatus = 'Pending')");
@@ -33,7 +34,7 @@ mysqli_query($con, "UPDATE orders SET transactionId = '$transactionId' WHERE use
 // eSewa Configuration (EPAY V2 Sandbox)
 $epay_url = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
 $product_code = "EPAYTEST"; 
-$secret_key = "8g8MpS2P8C6q4u8S"; // Standard sandbox secret key
+$secret_key = "8gBm/:&EnhH.1/q"; 
 
 // Dynamically determine the base URL
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
