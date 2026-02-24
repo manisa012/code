@@ -11,6 +11,8 @@ else{
 		$payment_method = $_POST['paymethod'];
 		
 		if($payment_method == 'eSewa') {
+			// Update payment method in database first
+			mysqli_query($con,"update orders set paymentMethod='$payment_method' where userId='".$_SESSION['id']."' and paymentMethod is null ");
 			// Redirect to eSewa hybrid payment page (works with current eSewa system)
 			header('location:esewa-hybrid-payment.php');
 			exit();
